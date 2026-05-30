@@ -26,7 +26,7 @@ class_name = "SessionStream"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SessionStream"]
+new_sqlite_classes = ["SessionStream"]
 
 # Optional: set a default ingest key for local dev in .dev.vars instead of here.
 # [vars]
