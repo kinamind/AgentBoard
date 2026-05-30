@@ -3,10 +3,10 @@ import { api, getToken, setToken, type Session, type Stats, type AgentEvent } fr
 import LiveTerminal from "./Terminal";
 
 const STATUS_COLORS: Record<string, string> = {
-  starting: "#a0a0a0",
+  starting: "#94a3b8",
   running: "#3b82f6",
-  waiting: "#eab308",
-  done: "#22c55e",
+  waiting: "#f59e0b",
+  done: "#10b981",
   error: "#ef4444",
   cancelled: "#6b7280",
 };
@@ -21,7 +21,8 @@ function ago(ts: number): string {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className="badge" style={{ background: STATUS_COLORS[status] || "#888" }}>
+    <span className={`badge badge-${status}`}>
+      <i className="badge-dot" />
       {status}
     </span>
   );
@@ -83,65 +84,90 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          AgentBoard <span className="muted">· coding agent monitor</span>
+          <div className="logo" />
+          <div>
+            <div className="brand-name">AgentBoard</div>
+            <div className="brand-sub">coding agent monitor</div>
+          </div>
         </div>
-        <div className="token">
-          <input
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            placeholder="API key"
-          />
-          <button
-            onClick={() => {
-              setToken(tokenInput);
-              refresh();
-            }}
-          >
-            Set key
-          </button>
+        <div className="topbar-right">
+          <div className="token">
+            <input
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="API key"
+              spellCheck={false}
+            />
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setToken(tokenInput);
+                refresh();
+              }}
+            >
+              Set key
+            </button>
+          </div>
         </div>
       </header>
 
       {error && <div className="error">⚠ {error}</div>}
 
       <div className="stats">
-        <div className="stat">
-          <div className="stat-n">{stats?.total ?? 0}</div>
-          <div className="stat-l">total</div>
+        <div className="pill">
+          <span className="pill-dot" style={{ background: "var(--accent)" }} />
+          <span className="pill-text">
+            <span className="pill-n">{stats?.total ?? 0}</span>
+            <span className="pill-l">total</span>
+          </span>
         </div>
         {stats &&
           Object.entries(stats.status).map(([k, v]) => (
-            <div className="stat" key={k}>
-              <div className="stat-n" style={{ color: STATUS_COLORS[k] }}>
-                {v}
-              </div>
-              <div className="stat-l">{k}</div>
+            <div className="pill" key={k}>
+              <span className="pill-dot" style={{ background: STATUS_COLORS[k] || "#888" }} />
+              <span className="pill-text">
+                <span className="pill-n">{v}</span>
+                <span className="pill-l">{k}</span>
+              </span>
             </div>
           ))}
       </div>
 
       <div className="main">
-        <aside className="list">
-          {sessions.length === 0 && <div className="empty">No sessions yet.</div>}
-          {sessions.map((s) => (
-            <div
-              key={s.id}
-              className={"row" + (s.id === selected ? " active" : "")}
-              onClick={() => setSelected(s.id)}
-            >
-              <div className="row-top">
-                <StatusBadge status={s.status} />
-                <span className="agent">{s.agent_type}</span>
-                <span className="muted small">{ago(s.updated_at)} ago</span>
+        <aside className="sidebar">
+          <div className="sidebar-head">
+            <span>Sessions</span>
+            <span className="count">{sessions.length}</span>
+          </div>
+          <div className="list">
+            {sessions.length === 0 && <div className="empty">No sessions yet.</div>}
+            {sessions.map((s) => (
+              <div
+                key={s.id}
+                className={"row" + (s.id === selected ? " active" : "")}
+                onClick={() => setSelected(s.id)}
+              >
+                <div className="row-top">
+                  <span className="row-title">{s.title || s.id}</span>
+                  <span className="row-time">{ago(s.updated_at)}</span>
+                </div>
+                <div className="row-meta">
+                  <StatusBadge status={s.status} />
+                  <span className="agent">{s.agent_type}</span>
+                </div>
+                {s.cwd && <div className="row-cwd">{s.cwd}</div>}
               </div>
-              <div className="title">{s.title || s.id}</div>
-              <div className="muted small">{s.cwd || ""}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </aside>
 
         <section className="detail">
-          {!current && <div className="empty big">Select a session to inspect.</div>}
+          {!current && (
+            <div className="empty big">
+              <div className="empty-icon">◎</div>
+              Select a session to inspect its live terminal and events.
+            </div>
+          )}
           {current && (
             <>
               <div className="detail-head">
@@ -149,33 +175,48 @@ export default function App() {
                   <div className="detail-title">
                     {current.title || current.id} <StatusBadge status={current.status} />
                   </div>
-                  <div className="muted small">
-                    {current.agent_type} · {current.host || "?"} · pid {current.pid ?? "?"} ·{" "}
-                    {current.cwd || ""}
-                    {current.exit_code != null && ` · exit ${current.exit_code}`}
+                  <div className="detail-meta">
+                    <span>agent <b>{current.agent_type}</b></span>
+                    <span>host <b>{current.host || "?"}</b></span>
+                    <span>pid <b>{current.pid ?? "?"}</b></span>
+                    {current.cwd && <span>cwd <b>{current.cwd}</b></span>}
+                    {current.exit_code != null && <span>exit <b>{current.exit_code}</b></span>}
                   </div>
                 </div>
                 <div className="controls">
                   <button onClick={() => sendCmd("message")}>Message</button>
                   <button onClick={() => sendCmd("pause")}>Pause</button>
                   <button onClick={() => sendCmd("resume")}>Resume</button>
-                  <button className="danger" onClick={() => sendCmd("cancel")}>
+                  <button className="btn-danger" onClick={() => sendCmd("cancel")}>
                     Cancel
                   </button>
                 </div>
               </div>
 
-              <LiveTerminal key={current.id} sessionId={current.id} />
+              <div className="terminal-wrap">
+                <div className="terminal-bar">
+                  <span className="tdot r" />
+                  <span className="tdot y" />
+                  <span className="tdot g" />
+                  <span className="terminal-bar-label">live terminal · {current.id}</span>
+                </div>
+                <LiveTerminal key={current.id} sessionId={current.id} />
+              </div>
 
               <div className="events">
                 <div className="events-head">Events</div>
-                {events.map((e) => (
-                  <div className={"event lvl-" + e.level} key={e.id}>
-                    <span className="muted small">{new Date(e.ts).toLocaleTimeString()}</span>
-                    <span className="etype">{e.type}</span>
-                    <span>{e.message}</span>
-                  </div>
-                ))}
+                <div className="events-body">
+                  {events.length === 0 && <div className="empty">No events yet.</div>}
+                  {events.map((e) => (
+                    <div className={"event lvl-" + e.level} key={e.id}>
+                      <span className="event-time">
+                        {new Date(e.ts).toLocaleTimeString()}
+                      </span>
+                      <span className="etype">{e.type}</span>
+                      <span className="event-msg">{e.message}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </>
           )}

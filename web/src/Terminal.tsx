@@ -13,9 +13,29 @@ export default function LiveTerminal({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     const term = new Terminal({
       convertEol: true,
-      fontFamily: "SFMono-Regular, Menlo, Consolas, monospace",
-      fontSize: 12,
-      theme: { background: "#0b0e14", foreground: "#c5c8c6" },
+      fontFamily: '"JetBrains Mono", SFMono-Regular, Menlo, Consolas, monospace',
+      fontSize: 12.5,
+      lineHeight: 1.35,
+      letterSpacing: 0.2,
+      theme: {
+        background: "#101218",
+        foreground: "#cdd1dc",
+        cursor: "#6366f1",
+        black: "#1d212b",
+        brightBlack: "#646a7a",
+        red: "#ef4444",
+        brightRed: "#fca5a5",
+        green: "#10b981",
+        brightGreen: "#6ee7b7",
+        yellow: "#f59e0b",
+        brightYellow: "#fcd34d",
+        blue: "#3b82f6",
+        brightBlue: "#93c5fd",
+        magenta: "#8b5cf6",
+        brightMagenta: "#c4b5fd",
+        cyan: "#06b6d4",
+        brightCyan: "#67e8f9",
+      },
       scrollback: 10000,
     });
     const fit = new FitAddon();
