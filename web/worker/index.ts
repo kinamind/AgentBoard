@@ -1,8 +1,9 @@
-// AgentBoard Worker — Pages "advanced mode" entrypoint (built to dist/_worker.js).
+// AgentBoard Worker — single-Worker entrypoint (Cloudflare Workers + static assets).
 //
-// Advanced mode lets us export the SessionStream Durable Object (file-based Pages
-// Functions only keep onRequest* exports and tree-shake DO classes). This single
-// Worker routes /api/v1/* to the existing handlers and falls back to static assets.
+// One Worker serves the SPA dashboard (via the ASSETS binding), routes /api/v1/* to the
+// handlers below, and hosts the SessionStream Durable Object. Workers (unlike Pages)
+// fully support self-hosted Durable Objects + migrations, so this deploys with one
+// `wrangler deploy`.
 
 import { CORS_HEADERS } from "../shared/api";
 import type { Env } from "../shared/types";

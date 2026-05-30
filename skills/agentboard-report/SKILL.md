@@ -13,7 +13,7 @@ status changes, and live terminal output over HTTP.
 The reporter CLI lives in the `agent/` package and needs two env vars:
 
 ```bash
-export AGENTBOARD_URL=http://127.0.0.1:8788   # or your CF Pages URL
+export AGENTBOARD_URL=http://127.0.0.1:8788   # or your deployed Worker URL
 export AGENTBOARD_KEY=<api-key>               # default local dev key: dev-local-key
 ```
 

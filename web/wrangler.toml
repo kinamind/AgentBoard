@@ -1,12 +1,19 @@
-# AgentBoard — Cloudflare Pages config
-# 1. Create the D1 database once:   wrangler d1 create agentboard
-#    then paste the returned database_id below.
-# 2. Init schema:                   npm run db:init:local   (and :remote for prod)
-# 3. Local dev:                     npm run pages:dev
+# AgentBoard — Cloudflare Worker (with static assets) config
+# Single Worker hosts: the SPA dashboard (static assets), the /api backend,
+# the SessionStream Durable Object, and the D1 database.
+#
+# Local dev:   npm run dev:server        (wrangler dev — local D1 + DO)
+# Deploy:      npm run deploy            (wrangler deploy)
+# Init schema: npm run db:init:local     (and :remote for prod)
 name = "agentboard"
+main = "worker/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "dist"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
 
 [[d1_databases]]
 binding = "DB"

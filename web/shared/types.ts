@@ -3,7 +3,7 @@
 export interface Env {
   DB: D1Database;
   SESSION_STREAM: DurableObjectNamespace;
-  // Static asset server (provided automatically in Pages advanced mode).
+  // Static asset server (the [assets] binding in wrangler.toml).
   ASSETS: Fetcher;
   // Optional bootstrap key for local dev / first-run, set via .dev.vars or CF secret.
   AGENTBOARD_BOOTSTRAP_KEY?: string;

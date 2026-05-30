@@ -15,7 +15,7 @@ observe, analyze, and control sessions.
 - **Realtime + persistent** — live terminal stream to browsers over WebSocket, plus
   durable history in a database.
 - **SaaS + self-host** — multi-tenant by API key; runs locally for free, deploys to
-  Cloudflare Pages unchanged.
+  Cloudflare Workers unchanged.
 - **Monitoring/management surface** — read APIs for analysis + a command channel so an
   external controller can steer a session (pause / stop / send-message / annotate).
 
@@ -23,7 +23,7 @@ observe, analyze, and control sessions.
 
 ```
 ┌──────────────┐   HTTP push (events, logs)     ┌──────────────────────────────┐
-│ Coding agent │ ─────────────────────────────▶ │  Pages Functions (Workers/TS) │
+│ Coding agent │ ─────────────────────────────▶ │  Worker (TS) + static assets  │
 │  + skill/CLI │   GET commands (poll)          │  /api/v1/*  ── auth, ingest   │
 └──────────────┘ ◀───────────────────────────── │        │            │         │
                                                  │        ▼            ▼         │
@@ -43,18 +43,19 @@ observe, analyze, and control sessions.
 - **Persistence**: every write hits D1 first (source of truth); the DO is the realtime
   bus. Large log blobs can overflow to R2 (optional, off by default).
 
-## Why this fits Cloudflare Pages
+## Why this fits Cloudflare Workers
 
-CF Pages can't host a long-running Python server, but it natively runs:
-- **Static assets** (the React/Vite build) — the dashboard.
-- **Pages Functions** — the API (Workers runtime, TypeScript).
+CF can't host a long-running Python server, but a single Worker natively runs:
+- **Static assets** (the React/Vite build) — the dashboard, via the `[assets]` binding.
+- **Worker** — the API (`/api/v1/*`, Workers runtime, TypeScript).
 - **Durable Objects** — the only correct primitive for WebSocket coordination + live
-  session state on CF.
+  session state on CF. (Pages can't self-host a DO — it rejects `[[migrations]]` and
+  requires an external `script_name` — so the app is a Worker, not a Pages project.)
 - **D1** — SQLite-compatible serverless DB for persistence.
 
-Local dev uses `wrangler pages dev`, which emulates Workers + DO + D1 via Miniflare —
-no Docker, identical code path to production. Deploy = push to GitHub; CF Pages builds
-and publishes automatically.
+Local dev uses `wrangler dev`, which emulates Workers + DO + D1 via Miniflare —
+no Docker, identical code path to production. Deploy = `wrangler deploy` (or git
+auto-deploy via Workers Builds).
 
 `uv`/Python owns the **agent side** (the skill + reporter CLI + process wrapper), which
 is what actually runs next to each coding agent.
@@ -62,7 +63,9 @@ is what actually runs next to each coding agent.
 ## Components
 
 ### 1. Web app (`web/`, TypeScript)
-- `functions/` — Pages Functions implementing `/api/v1/*` and the WS upgrade endpoint.
+- `worker/index.ts` — single Worker entrypoint: routes `/api/v1/*` to the handlers,
+  exports the `SessionStream` Durable Object, and falls back to static assets (the SPA).
+- `routes/api/v1/*` — request handlers for `/api/v1/*` and the WS upgrade endpoint.
 - `do/SessionStream.ts` — Durable Object: holds subscriber sockets, broadcasts
   status/log frames, keeps an in-memory ring buffer (last N lines).
 - `src/` — React + Vite + Tailwind dashboard; xterm.js for terminal rendering.
@@ -139,7 +142,7 @@ This keeps the agent push-only (no inbound socket) while still allowing remote c
 
 - API keys scope writes to a tenant; `scopes` gates ingest vs. management vs. read.
 - All session ids are random (ULID-ish); the WS subscribe path requires a read token.
-- CORS configured for the dashboard origin; same-origin in the CF Pages deployment.
+- CORS configured for the dashboard origin; same-origin in the CF Workers deployment.
 
 ## Roadmap (post-slice)
 

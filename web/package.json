@@ -5,12 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:client": "vite build",
-    "build:worker": "esbuild worker/index.ts --bundle --format=esm --platform=neutral --outfile=dist/_worker.js",
-    "build": "tsc -b --noEmit && npm run build:client && npm run build:worker",
+    "build": "tsc -b --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "pages:dev": "npm run build && wrangler pages dev dist",
+    "dev:server": "npm run build && wrangler dev --port 8788",
+    "deploy": "npm run build && wrangler deploy",
     "db:init:local": "wrangler d1 execute agentboard --local --file=./schema.sql",
     "db:init:remote": "wrangler d1 execute agentboard --remote --file=./schema.sql"
   },

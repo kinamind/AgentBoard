@@ -1,9 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// The dashboard (static SPA) is built into ./dist and served by Cloudflare Pages.
-// API + WebSocket live under /api/* and are handled by Pages Functions, so we proxy
-// them to the local wrangler dev server during `vite` dev.
+// The dashboard (static SPA) is built into ./dist and served by the Worker via the
+// ASSETS binding. API + WebSocket live under /api/* (handled by the Worker), so we proxy
+// them to the local `wrangler dev` server during `vite` dev.
 export default defineConfig({
   plugins: [react()],
   server: {

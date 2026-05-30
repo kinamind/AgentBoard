@@ -10,15 +10,15 @@ observe, analyze, and remotely control sessions (cancel / pause / message).
 - **HTTP Push ingest** — agents need only outbound HTTP (firewall/sandbox friendly).
 - **Realtime + persistent** — WebSocket live terminal stream + durable DB history.
 - **SaaS + self-host** — multi-tenant by API key; runs locally, deploys to Cloudflare
-  Pages from GitHub with zero code changes.
+  Workers from GitHub with zero code changes.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 
 ## Layout
 
 ```
-web/      TypeScript web app — Cloudflare Pages (React+Vite dashboard,
-          Advanced-Mode Worker API, Durable Object for WS, D1 for persistence)
+web/      TypeScript web app — Cloudflare Worker (React+Vite dashboard served as
+          static assets, Worker API, Durable Object for WS, D1 for persistence)
 agent/    Python (uv) agent-side client + reporter CLI + process wrapper
 skills/   Agent skills: agentboard-report (publish) + agentboard-monitor (observe/manage)
 docs/     Architecture & design
@@ -26,11 +26,14 @@ docs/     Architecture & design
 
 ## Why this stack
 
-Cloudflare Pages can't host a long-running Python server with WebSockets, so the web app
-is TypeScript on CF primitives (Advanced-Mode Worker + Durable Objects + D1). The same
-code runs locally via `wrangler pages dev` (Miniflare — no Docker) and deploys to CF Pages
-on `git push`. `uv`/Python powers the agent-side skills that actually run next to each
-coding agent and push data in.
+Cloudflare can't host a long-running Python server with WebSockets, so the web app is
+TypeScript on CF primitives: a single **Worker with static assets** that serves the SPA,
+the `/api` backend, the `SessionStream` **Durable Object**, and **D1**. (Pages can't
+self-host Durable Objects — it rejects `[[migrations]]` and requires an external
+`script_name` — so a Worker is the right home.) The same code runs locally via
+`wrangler dev` (Miniflare — no Docker) and deploys with one `wrangler deploy` (or git
+auto-deploy via Workers Builds). `uv`/Python powers the agent-side skills that run next
+to each coding agent and push data in.
 
 ## Quick start (local)
 
@@ -41,14 +44,14 @@ cd web
 npm install
 wrangler d1 create agentboard            # paste database_id into wrangler.toml
 npm run db:init:local                    # create tables in local D1
-npm run pages:dev                        # builds dist + serves Functions on :8788
+npm run dev:server                       # builds dist + serves the Worker on :8788
 ```
 
 Local dev API key: `dev-local-key` (seeded in `schema.sql`). Open the printed URL,
 paste the key in the top-right field.
 
 > Frontend hot-reload: run `npm run dev` (Vite on :5173, proxies `/api` to :8788)
-> in a second terminal alongside `npm run pages:dev`.
+> in a second terminal alongside `npm run dev:server`.
 
 ### 2. Agent reporter (uv)
 
@@ -70,11 +73,11 @@ uv run agentboard watch --follow
 uv run agentboard ctl <session_id> message --text "wrap up please"
 ```
 
-## Deploy to Cloudflare Pages
+## Deploy to Cloudflare (Workers)
 
 You only need **one** database: a D1 named `agentboard`. The Durable Object (`SessionStream`)
-is auto-provisioned by the `[[migrations]]` block in `web/wrangler.toml` — nothing to create
-by hand. No Redis / Postgres / R2 required.
+is provisioned by the `[[migrations]]` block in `web/wrangler.toml` on first deploy — nothing
+to create by hand. No Redis / Postgres / R2 required.
 
 **1. Create the D1 and wire up its id**
 
@@ -82,34 +85,36 @@ by hand. No Redis / Postgres / R2 required.
 cd web
 wrangler login                                   # or set CLOUDFLARE_API_TOKEN
 wrangler d1 create agentboard                    # copy the printed database_id
-# paste it into web/wrangler.toml -> database_id (replaces REPLACE_AFTER_d1_create)
+# paste it into web/wrangler.toml -> database_id
 npm run db:init:remote                           # create tables in the remote D1
-git commit -am "set D1 database_id" && git push
 ```
 
-**2. Connect the repo in Cloudflare → Pages → Create → Connect to Git**
+**2. Deploy**
 
-| Field | Value |
-|---|---|
-| Framework preset | None |
-| **Root directory** | `web` |
-| Build command | `npm install && npm run build` |
-| Build output directory | `dist` |
+Either one-shot from your machine:
 
-Setting **Root directory = `web`** makes Pages read `web/wrangler.toml` automatically, so the
-D1 binding, the Durable Object binding, and the DO migration all apply with no manual bindings
-in the dashboard.
+```bash
+cd web && npm run deploy            # = npm run build && wrangler deploy
+```
+
+…or connect the repo for git auto-deploy: Cloudflare → **Workers & Pages → Create →
+Workers → Connect to Git**, select the repo, set **Root directory = `web`** and build
+command `npm install && npm run build`. Workers Builds reads `web/wrangler.toml`, so the
+D1 binding, the Durable Object binding, and the migration all apply automatically.
 
 **3. Set a real ingest key** (don't use the seeded `dev-local-key` in prod)
 
-In Pages → Settings → **Variables and Secrets**, add a **Secret** `AGENTBOARD_BOOTSTRAP_KEY`
-(value: `openssl rand -hex 24`) — the Worker accepts it as a full-scope key. Alternatively
-insert a row into `api_keys` via `wrangler d1 execute agentboard --remote --command "..."`.
+```bash
+cd web && wrangler secret put AGENTBOARD_BOOTSTRAP_KEY    # paste `openssl rand -hex 24`
+```
+
+The Worker accepts that secret as a full-scope key. Alternatively insert a row into
+`api_keys` via `wrangler d1 execute agentboard --remote --command "..."`.
 
 **4. Point agents at the deployment**
 
 ```bash
-export AGENTBOARD_URL=https://<project>.pages.dev
+export AGENTBOARD_URL=https://agentboard.<your-subdomain>.workers.dev
 export AGENTBOARD_KEY=<the key from step 3>
 ```
 
