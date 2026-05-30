@@ -50,6 +50,9 @@ class AgentBoardClient:
             headers={
                 "Authorization": f"Bearer {self.key}",
                 "Content-Type": "application/json",
+                # A non-default UA: Cloudflare's edge blocks the stock
+                # "Python-urllib/x.y" signature with HTTP 403 (error 1010).
+                "User-Agent": "agentboard-client/0.1",
             },
         )
         try:
