@@ -11,7 +11,7 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "agentboard"
-database_id = "REPLACE_AFTER_d1_create"
+database_id = "95d01b6f-dadb-4f36-8f6a-af5c426cc56e"
 
 [[durable_objects.bindings]]
 name = "SESSION_STREAM"
