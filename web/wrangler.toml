@@ -1,0 +1,26 @@
+# AgentBoard — Cloudflare Pages config
+# 1. Create the D1 database once:   wrangler d1 create agentboard
+#    then paste the returned database_id below.
+# 2. Init schema:                   npm run db:init:local   (and :remote for prod)
+# 3. Local dev:                     npm run pages:dev
+name = "agentboard"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agentboard"
+database_id = "REPLACE_AFTER_d1_create"
+
+[[durable_objects.bindings]]
+name = "SESSION_STREAM"
+class_name = "SessionStream"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionStream"]
+
+# Optional: set a default ingest key for local dev in .dev.vars instead of here.
+# [vars]
+# AGENTBOARD_BOOTSTRAP_KEY = "dev-local-key"

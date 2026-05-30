@@ -1,0 +1,27 @@
+# Python / uv
+__pycache__/
+*.pyc
+.venv/
+agent/.venv/
+dist/
+*.egg-info/
+.pytest_cache/
+
+# Node / web
+node_modules/
+web/node_modules/
+web/dist/
+.wrangler/
+web/.wrangler/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.dev.vars
+web/.dev.vars
+*.local
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
