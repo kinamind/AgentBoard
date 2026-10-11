@@ -1,82 +1,105 @@
 ---
 name: agentboard-monitor
-description: Observe, analyze, and manage other coding-agent sessions running on AgentBoard. Use when asked to "check what the agents are doing", "monitor running sessions", "find stuck/failed agents", "tail another agent's output", or to remotely "cancel/pause/message" a session. Provides read APIs for analysis and a command channel for control.
+description: Observe, triage and manage the agents of an AgentBoard OPC (one-person company) console - by department, task and decision queue. Use when asked to "check what the agents are doing", "monitor running sessions", "find stuck/failed agents", "what is waiting for me", "department status", "tail another agent's output", or to remotely "cancel/pause/message" a session, answer a decision, or (re)assign sessions to departments. Also 监控 / 巡检 / 看看各部门 / 卡住的 agent / 待我决策.
 ---
 
-# AgentBoard — Monitor & manage sessions
+# AgentBoard - Monitor & manage
 
-Inspect and steer other agent sessions through the AgentBoard monitoring API.
+Inspect and steer other agents through the AgentBoard API. Think of yourself as the
+chief of staff: read the company state, flag what needs the founder, act within limits.
 
 ## Setup
 
 ```bash
-export AGENTBOARD_URL=http://127.0.0.1:8788
-export AGENTBOARD_KEY=<api-key-with-read+manage-scope>
+export AGENTBOARD_URL=https://agentboard.frosty-poetry-59f5.workers.dev
+export AGENTBOARD_KEY=dev-local-key          # needs read + manage scope
 ```
 
-## Observe
+Use the installed `agentboard` CLI, or `PYTHONPATH=<repo>/agent/src python -m agentboard.cli ...`.
+HTTP fallback: add `-A agentboard-client/0.1` to curl (Cloudflare blocks default Python UA).
 
-List sessions (optionally filtered) and watch live:
+## 1. Observe
 
 ```bash
-uv run agentboard watch                       # one-shot table
-uv run agentboard watch --follow              # live-updating
-uv run agentboard watch --status error --json # machine-readable, filtered
-uv run agentboard stats                       # aggregate counts for analysis
+agentboard dept                          # departments: active / total / failed
+agentboard watch                         # all sessions (one-shot table)
+agentboard watch --follow                # live board
+agentboard watch --status error --json   # machine-readable, filtered
+agentboard stats                         # totals + by_department
+agentboard logs <session_id> --follow    # tail one session's terminal
+agentboard task list                     # task board (ready / waiting)
+agentboard decide list                   # decisions waiting for the founder
 ```
 
-Tail a specific session's terminal output:
+Sessions carry `department_id`, `task_id`, `tags`. Filter by department with
+`GET /api/v1/sessions?department=<slug|none>`.
+
+## 2. Triage (run this first)
 
 ```bash
-uv run agentboard logs <session_id> --follow
+python scripts/triage.py                  # whole company
+python scripts/triage.py --department engineering --stale-min 10
 ```
 
-Inspect history programmatically (for analysis):
+It prints per-department health and flags: **stuck** (running/waiting but silent for N min),
+**failed**, **pending decisions** (founder action needed), **unassigned** sessions,
+and sessions with **no task** (work not tied to a goal). Exit code is 0 even when issues
+exist; read the output.
+
+Judgement guide:
+- **Stuck**: read the last logs/events first (`agentboard logs <id>`); then `ctl <id> message`
+  asking for status; only `cancel` if it is clearly looping or the founder agrees.
+- **Failed**: summarise the last ~30 log lines + error events; say whether a retry is sensible.
+- **Waiting**: usually a decision is pending - surface it to the founder verbatim.
+- **No task / no department**: propose an assignment (below), do not guess silently.
+
+## 3. Manage
+
+```bash
+agentboard ctl <session_id> message --text "summarise progress, then stop"
+agentboard ctl <session_id> pause | resume | cancel
+agentboard decide answer <decision_id> --text "yes"       # only with the founder's say-so
+```
+
+Notes:
+- Commands to an already finished session fail with **409**; do not retry.
+- Pending commands expire after 10 minutes if the agent never polls.
+- Only sessions started via `agentboard wrap` (or agents that poll `/commands`) act on commands.
+  `cancel` needs a `wrap`ped process.
+
+## 4. Organize (assignment)
+
+```bash
+agentboard assign <session_id> marketing        # or: none
+agentboard rule marketing --field project --op prefix --value landing-
+agentboard reassign                              # apply task/roster/rules to unassigned sessions
+agentboard roster add --name "Researcher" --agent-type opencode --department research
+```
+
+Resolution order for a new session: **explicit > task > roster > rules**.
+Departments: `engineering` `marketing` `research` `strategy` `operations` `finance`.
+
+## 5. Programmatic
 
 ```python
 from agentboard import AgentBoardClient
 c = AgentBoardClient()
-for s in c.list_sessions(status="running"):
-    print(s["id"], s["agent_type"], s["title"])
-events = c.get_events("<session_id>")        # tool calls, errors, status changes
-logs = c.get_logs("<session_id>", after=0)   # full terminal history
+for d in c.departments()["departments"]:
+    print(d["slug"], d["status_counts"])
+stuck = [s for s in c.list_sessions(status="running")]
+events, logs = c.get_events(stuck[0]["id"]), c.get_logs(stuck[0]["id"])
 ```
 
-## Analyze (suggested checks)
+## 6. Decision support
 
-- **Stuck**: status `running`/`waiting` but `updated_at` older than N minutes → likely
-  hung; inspect logs, consider `message` or `cancel`.
-- **Failing**: status `error` with non-zero `exit_code` → read last log lines + events.
-- **Throughput**: use `stats` (counts by status/agent) to summarize fleet health.
-
-## Manage
-
-Send management commands; the target agent's wrapper applies them and acks the result:
-
-```bash
-uv run agentboard ctl <session_id> message --text "please summarize progress and stop"
-uv run agentboard ctl <session_id> pause
-uv run agentboard ctl <session_id> resume
-uv run agentboard ctl <session_id> cancel
-```
-
-Commands are queued and delivered when the target polls (push-only agents stay
-firewall-friendly). Only sessions started with `agentboard wrap` (or an agent that polls
-`/commands`) will act on them automatically; otherwise the command is recorded for the
-agent/operator to honor.
+For goal alignment and "should we do this" questions use the **agentboard-insights** skill
+(it pulls one context pack and posts structured analyses back).
 
 ## HTTP fallback
 
 ```bash
-curl -s "$AGENTBOARD_URL/api/v1/sessions?status=running" \
-  -H "Authorization: Bearer $AGENTBOARD_KEY"
-
-curl -s -X POST "$AGENTBOARD_URL/api/v1/sessions/<id>/commands" \
-  -H "Authorization: Bearer $AGENTBOARD_KEY" -H 'Content-Type: application/json' \
-  -d '{"kind":"cancel"}'
+curl -s "$AGENTBOARD_URL/api/v1/departments"                 -H "Authorization: Bearer $AGENTBOARD_KEY" -A agentboard-client/0.1
+curl -s "$AGENTBOARD_URL/api/v1/sessions?status=running"     -H "Authorization: Bearer $AGENTBOARD_KEY" -A agentboard-client/0.1
+curl -s -X POST "$AGENTBOARD_URL/api/v1/sessions/<id>/commands" -H "Authorization: Bearer $AGENTBOARD_KEY" \
+  -H 'Content-Type: application/json' -A agentboard-client/0.1 -d '{"kind":"cancel"}'
 ```
-
-## Helper
-
-`scripts/triage.py` prints a health summary and flags stuck/failed sessions:
-`uv run python scripts/triage.py`.

@@ -131,3 +131,28 @@ Full reference in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 First vertical slice: end-to-end ingest → persistence → realtime dashboard → monitoring
 & management. Roadmap (R2 log overflow, auth UI, cost/metrics panels, MCP wrapper) in the
 architecture doc.
+
+## OPC console (one-person company)
+
+Beyond monitoring, AgentBoard organizes agents like a company. See
+[`docs/OPC-DESIGN.md`](docs/OPC-DESIGN.md).
+
+- **Departments** - agents/sessions are grouped (`engineering`, `marketing`, `research`,
+  `strategy`, `operations`, `finance`, or your own). Resolution: explicit > task > roster > rules.
+- **Goals & tasks** - a task board with claim/lease, dependencies and hand-offs; sessions attach to tasks.
+- **Decision inbox** - agents ask the founder; the answer is delivered back to the agent.
+- **Insights** - NLP-framework based analysis (goal alignment, task review, decision briefs),
+  produced by an external agent by default (e.g. a TRAE automation) and posted back.
+- **Skills** - `agentboard-report`, `agentboard-monitor`, `agentboard-insights` in [`skills/`](skills/).
+
+```bash
+export AGENTBOARD_URL=https://agentboard.frosty-poetry-59f5.workers.dev
+export AGENTBOARD_KEY=dev-local-key
+agentboard wrap --agent claude-code --project my-app --department engineering -- <command>
+agentboard dept            # department health
+agentboard task claim --agent claude-code --department engineering
+agentboard insights context --scope company
+```
+
+After deploying a new version, upgrade the database once: `agentboard migrate`
+(idempotent; applies `POST /api/v1/admin/migrate`).

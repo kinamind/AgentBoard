@@ -4,18 +4,25 @@
 #
 # Usage:
 #   AGENTBOARD_URL=... AGENTBOARD_KEY=... \
-#   bash report.sh --agent claude-code --project myapp --title "task" -- <command...>
+#   bash report.sh --agent claude-code --project myapp --department engineering \
+#                  [--task t_xxx] [--tag demo] --title "task" -- <command...>
 set -euo pipefail
 
 AGENT="unknown"
 PROJECT=""
 TITLE=""
+DEPARTMENT=""
+TASK=""
+TAGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --agent) AGENT="$2"; shift 2 ;;
     --project) PROJECT="$2"; shift 2 ;;
     --title) TITLE="$2"; shift 2 ;;
+    --department) DEPARTMENT="$2"; shift 2 ;;
+    --task) TASK="$2"; shift 2 ;;
+    --tag) TAGS+=(--tag "$2"); shift 2 ;;
     --help|-h)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --) shift; break ;;
@@ -28,11 +35,19 @@ if [[ $# -eq 0 ]]; then
   exit 2
 fi
 
-# Prefer uv from the agent package; fall back to an installed agentboard.
+# Prefer an installed agentboard; fall back to uv, then to the repo's source tree.
 if command -v agentboard >/dev/null 2>&1; then
   RUN=(agentboard)
-else
+elif command -v uv >/dev/null 2>&1; then
   RUN=(uv run --project "$(dirname "$0")/../../../agent" agentboard)
+else
+  export PYTHONPATH="$(dirname "$0")/../../../agent/src${PYTHONPATH:+:$PYTHONPATH}"
+  RUN=(python3 -m agentboard.cli)
 fi
 
-exec "${RUN[@]}" wrap --agent "$AGENT" --project "$PROJECT" --title "$TITLE" -- "$@"
+EXTRA=()
+[[ -n "$DEPARTMENT" ]] && EXTRA+=(--department "$DEPARTMENT")
+[[ -n "$TASK" ]] && EXTRA+=(--task "$TASK")
+
+exec "${RUN[@]}" wrap --agent "$AGENT" --project "$PROJECT" --title "$TITLE" \
+  ${EXTRA[@]+"${EXTRA[@]}"} ${TAGS[@]+"${TAGS[@]}"} -- "$@"
