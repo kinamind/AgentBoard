@@ -67,6 +67,9 @@ export function Sidebar({ route, onNavigate }: { route: string; onNavigate: (id:
       <div className="sidebar-foot">
         <span className="live-dot" /> {t("foot.live")}
       </div>
+      <a className="intro-link" href="/landing.html" target="_blank" rel="noreferrer">
+        ▶ {t("nav.intro")}
+      </a>
     </aside>
   );
 }

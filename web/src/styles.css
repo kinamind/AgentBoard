@@ -328,3 +328,6 @@ select:focus { outline: 2px solid var(--primary-soft); border-color: var(--prima
   .detail-head { flex-direction: column; }
   .form-grid { grid-template-columns: 1fr; }
 }
+
+.intro-link { display: block; margin: 10px 10px 0; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; color: var(--primary); background: var(--primary-soft); text-decoration: none; text-align: center; }
+.intro-link:hover { filter: brightness(.96); }
