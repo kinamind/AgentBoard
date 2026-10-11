@@ -23,9 +23,9 @@ const I = {
 export const NAV: NavItem[] = [
   { id: "overview", label: "nav.overview", icon: I.overview },
   { id: "agents", label: "nav.agents", icon: I.agents },
-  { id: "departments", label: "nav.departments", icon: I.dept, soon: true },
-  { id: "goals", label: "nav.goals", icon: I.goals, soon: true },
-  { id: "insights", label: "nav.insights", icon: I.insights, soon: true },
+  { id: "departments", label: "nav.departments", icon: I.dept },
+  { id: "goals", label: "nav.goals", icon: I.goals },
+  { id: "insights", label: "nav.insights", icon: I.insights },
   { id: "settings", label: "nav.settings", icon: I.settings },
 ];
 

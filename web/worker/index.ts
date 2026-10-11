@@ -22,6 +22,7 @@ import { onRequest as commands } from "../routes/api/v1/sessions/[id]/commands";
 import { onRequest as commandAck } from "../routes/api/v1/sessions/[id]/commands/[cid]/ack";
 import { onRequest as stream } from "../routes/api/v1/sessions/[id]/stream";
 import { onRequest as stats } from "../routes/api/v1/stats";
+import * as opc from "../routes/api/v1/opc";
 
 type Handler = (ctx: { request: Request; env: Env; params: Record<string, string> }) => Promise<Response> | Response;
 
@@ -45,6 +46,28 @@ function route(path: string, handler: unknown): Route {
 }
 
 const routes: Route[] = [
+  route("/api/v1/admin/migrate", opc.adminMigrate),
+  route("/api/v1/departments", opc.departments),
+  route("/api/v1/departments/:id", opc.department),
+  route("/api/v1/agents", opc.agents),
+  route("/api/v1/agents/:id", opc.agent),
+  route("/api/v1/assignment-rules", opc.rules),
+  route("/api/v1/assignment-rules/:id", opc.rule),
+  route("/api/v1/sessions/reassign", opc.reassign), // must precede /sessions/:id
+  route("/api/v1/goals", opc.goals),
+  route("/api/v1/goals/:id", opc.goal),
+  route("/api/v1/tasks", opc.tasks),
+  route("/api/v1/tasks/claim", opc.claimTask), // must precede /tasks/:id
+  route("/api/v1/tasks/:id", opc.task),
+  route("/api/v1/tasks/:id/heartbeat", opc.taskHeartbeat),
+  route("/api/v1/decisions", opc.decisions),
+  route("/api/v1/decisions/:id/answer", opc.decisionAnswer),
+  route("/api/v1/analyses", opc.analyses),
+  route("/api/v1/analyses/:id", opc.analysis),
+  route("/api/v1/settings", opc.settings),
+  route("/api/v1/settings/:key", opc.settings),
+  route("/api/v1/insights/context", opc.insightsContext),
+  route("/api/v1/insights/frameworks", opc.frameworks),
   route("/api/v1/sessions", sessions),
   route("/api/v1/sessions/:id", sessionDetail),
   route("/api/v1/sessions/:id/logs", logs),

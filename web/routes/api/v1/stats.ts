@@ -20,6 +20,14 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     .bind(auth!.tenant)
     .all<{ agent_type: string; n: number }>();
 
+  const byDept = await env.DB.prepare(
+    "SELECT department_id, status, COUNT(*) AS n FROM sessions WHERE tenant = ? GROUP BY department_id, status",
+  )
+    .bind(auth!.tenant)
+    .all<{ department_id: string | null; status: string; n: number }>();
+  const by_department: Record<string, Record<string, number>> = {};
+  for (const r of byDept.results) (by_department[r.department_id || "none"] ||= {})[r.status] = r.n;
+
   const total = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM sessions WHERE tenant = ?",
   )
@@ -31,5 +39,5 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   const agents: Record<string, number> = {};
   for (const r of byAgent.results) agents[r.agent_type] = r.n;
 
-  return json({ total: total?.n || 0, status, agents });
+  return json({ total: total?.n || 0, status, agents, by_department });
 };

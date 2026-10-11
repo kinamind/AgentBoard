@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -76,16 +77,25 @@ class AgentBoardClient:
         pid: int | None = None,
         meta: dict | None = None,
         status: str = "running",
+        department: str | None = None,
+        task_id: str | None = None,
+        tags: list[str] | None = None,
     ) -> str:
+        # Department/task fall back to env so wrappers and skills can set them once.
+        department = department or os.environ.get("AGENTBOARD_DEPARTMENT") or None
+        task_id = task_id or os.environ.get("AGENTBOARD_TASK") or None
         body = {
             "agent_type": agent_type,
             "title": title,
             "project": project,
             "cwd": cwd if cwd is not None else os.getcwd(),
-            "host": host if host is not None else os.uname().nodename if hasattr(os, "uname") else None,
+            "host": host if host is not None else socket.gethostname(),
             "pid": pid if pid is not None else os.getpid(),
             "meta": meta,
             "status": status,
+            "department": department,
+            "task_id": task_id,
+            "tags": tags,
         }
         res = self._request("POST", "/sessions", body)
         self.session_id = res["id"]
@@ -174,6 +184,97 @@ class AgentBoardClient:
             f"/sessions/{self.session_id}/commands/{command_id}/ack",
             {"status": status, "result": result},
         )
+
+    # --- organization (departments / assignment) -------------------------
+    def departments(self) -> dict:
+        return self._request("GET", "/departments")
+
+    def create_department(self, name: str, slug: str | None = None, description: str | None = None) -> dict:
+        return self._request("POST", "/departments", {"name": name, "slug": slug, "description": description})
+
+    def assign(self, session_id: str, department: str | None) -> None:
+        self._request("PATCH", f"/sessions/{session_id}", {"department": department})
+
+    def reassign(self, only_unassigned: bool = True) -> dict:
+        return self._request("POST", "/sessions/reassign", {"only_unassigned": only_unassigned})
+
+    def add_rule(self, department: str, field: str, value: str, op: str = "eq", priority: int = 100) -> dict:
+        return self._request(
+            "POST",
+            "/assignment-rules",
+            {"department": department, "match_field": field, "match_op": op, "match_value": value, "priority": priority},
+        )
+
+    def roster(self) -> list[dict]:
+        return self._request("GET", "/agents")["agents"]
+
+    def add_agent(self, name: str, agent_type: str, department: str | None = None, role: str | None = None) -> dict:
+        return self._request("POST", "/agents", {"name": name, "agent_type": agent_type, "department": department, "role": role})
+
+    # --- goals / tasks ----------------------------------------------------
+    def goals(self) -> list[dict]:
+        return self._request("GET", "/goals")["goals"]
+
+    def create_goal(self, title: str, parent_id: str | None = None, outcome: dict | None = None, level: str | None = None) -> dict:
+        return self._request("POST", "/goals", {"title": title, "parent_id": parent_id, "outcome": outcome, "level": level})
+
+    def tasks(self, **filters: str) -> list[dict]:
+        q = "&".join(f"{k}={v}" for k, v in filters.items() if v)
+        return self._request("GET", "/tasks" + (f"?{q}" if q else ""))["tasks"]
+
+    def create_task(self, title: str, goal_id: str | None = None, department: str | None = None,
+                    description: str | None = None, depends_on: list[str] | None = None) -> dict:
+        return self._request(
+            "POST",
+            "/tasks",
+            {"title": title, "goal_id": goal_id, "department": department, "description": description, "depends_on": depends_on},
+        )
+
+    def claim_task(self, agent: str | None = None, department: str | None = None, lease_seconds: int = 900) -> dict | None:
+        return self._request(
+            "POST", "/tasks/claim", {"agent": agent, "department": department, "lease_seconds": lease_seconds}
+        )["task"]
+
+    def update_task(self, task_id: str, **fields: Any) -> None:
+        self._request("PATCH", f"/tasks/{task_id}", fields)
+
+    def task_heartbeat(self, task_id: str, lease_seconds: int = 900) -> dict:
+        return self._request("POST", f"/tasks/{task_id}/heartbeat", {"lease_seconds": lease_seconds})
+
+    # --- decisions inbox ---------------------------------------------------
+    def ask_decision(self, question: str, options: list[str] | None = None, session_id: str | None = None,
+                     task_id: str | None = None) -> dict:
+        return self._request(
+            "POST",
+            "/decisions",
+            {"question": question, "options": options, "session_id": session_id or self.session_id, "task_id": task_id},
+        )
+
+    def decisions(self, status: str | None = "pending") -> list[dict]:
+        return self._request("GET", "/decisions" + (f"?status={status}" if status else ""))["decisions"]
+
+    def answer_decision(self, decision_id: str, answer: str) -> None:
+        self._request("POST", f"/decisions/{decision_id}/answer", {"answer": answer})
+
+    # --- insights ------------------------------------------------------------
+    def insights_context(self, scope: str = "company", scope_id: str | None = None) -> dict:
+        q = f"?scope={scope}" + (f"&id={scope_id}" if scope_id else "")
+        return self._request("GET", "/insights/context" + q)
+
+    def post_analysis(self, framework: str, target_type: str, result: dict, target_id: str | None = None,
+                      analyzer: str = "external:agent") -> dict:
+        return self._request(
+            "POST",
+            "/analyses",
+            {"framework": framework, "target_type": target_type, "target_id": target_id, "result": result, "analyzer": analyzer},
+        )
+
+    def analyses(self, **filters: str) -> list[dict]:
+        q = "&".join(f"{k}={v}" for k, v in filters.items() if v)
+        return self._request("GET", "/analyses" + (f"?{q}" if q else ""))["analyses"]
+
+    def migrate(self) -> dict:
+        return self._request("POST", "/admin/migrate", {})
 
     # --- helpers ---------------------------------------------------------
     def _require(self) -> None:

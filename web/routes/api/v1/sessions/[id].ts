@@ -9,11 +9,16 @@ import {
   readJson,
   requireScope,
 } from "../../../../shared/api";
+import { resolveDept } from "../opc";
 
 interface PatchBody {
   status?: string;
   title?: string;
   exit_code?: number;
+  department?: string | null;
+  department_id?: string | null;
+  task_id?: string | null;
+  tags?: string[];
   meta?: Record<string, unknown>;
 }
 
@@ -59,6 +64,18 @@ export const onRequest: PagesFunction<Env, "id"> = async (ctx) => {
     if (body.exit_code !== undefined) {
       sets.push("exit_code = ?");
       binds.push(body.exit_code);
+    }
+    if (body.department !== undefined || body.department_id !== undefined) {
+      sets.push("department_id = ?");
+      binds.push(await resolveDept(env, auth!.tenant, body.department || body.department_id));
+    }
+    if (body.task_id !== undefined) {
+      sets.push("task_id = ?");
+      binds.push(body.task_id);
+    }
+    if (body.tags !== undefined) {
+      sets.push("tags = ?");
+      binds.push(body.tags.length ? JSON.stringify(body.tags) : null);
     }
     if (body.meta !== undefined) {
       sets.push("meta_json = ?");

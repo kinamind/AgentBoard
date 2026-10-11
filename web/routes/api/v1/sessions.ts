@@ -8,6 +8,7 @@ import {
   readJson,
   requireScope,
 } from "../../../shared/api";
+import { autoDepartment, resolveDept } from "./opc";
 
 interface CreateSessionBody {
   agent_type?: string;
@@ -17,6 +18,9 @@ interface CreateSessionBody {
   host?: string;
   pid?: number;
   status?: string;
+  department?: string; // slug or id
+  task_id?: string;
+  tags?: string[];
   meta?: Record<string, unknown>;
 }
 
@@ -33,6 +37,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     const status = url.searchParams.get("status");
     const project = url.searchParams.get("project");
     const agentType = url.searchParams.get("agent_type");
+    const department = url.searchParams.get("department_id") || url.searchParams.get("department");
     const limit = Math.min(Number(url.searchParams.get("limit") || 100), 500);
 
     const where = ["tenant = ?"];
@@ -49,9 +54,18 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       where.push("agent_type = ?");
       binds.push(agentType);
     }
+    if (department) {
+      if (department === "none") {
+        where.push("department_id IS NULL");
+      } else {
+        where.push("department_id = ?");
+        binds.push((await resolveDept(env, auth!.tenant, department)) || department);
+      }
+    }
     const rows = await env.DB.prepare(
       `SELECT id, project_id, agent_type, title, status, cwd, host, pid,
-              started_at, updated_at, ended_at, exit_code, last_seq, meta_json
+              started_at, updated_at, ended_at, exit_code, last_seq, meta_json,
+              department_id, task_id, tags
        FROM sessions WHERE ${where.join(" AND ")}
        ORDER BY updated_at DESC LIMIT ?`,
     )
@@ -77,11 +91,23 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         .run();
     }
 
+    // Department: explicit > task > roster > assignment rules.
+    let departmentId = await resolveDept(env, auth!.tenant, body.department);
+    if (!departmentId) {
+      departmentId = await autoDepartment(env, auth!.tenant, {
+        agent_type: body.agent_type,
+        project: body.project,
+        title: body.title,
+        cwd: body.cwd,
+        task_id: body.task_id,
+      });
+    }
+
     await env.DB.prepare(
       `INSERT INTO sessions
         (id, tenant, project_id, agent_type, title, status, cwd, host, pid,
-         started_at, updated_at, meta_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         started_at, updated_at, meta_json, department_id, task_id, tags)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
@@ -96,8 +122,20 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         ts,
         ts,
         body.meta ? JSON.stringify(body.meta) : null,
+        departmentId,
+        body.task_id || null,
+        body.tags?.length ? JSON.stringify(body.tags) : null,
       )
       .run();
+
+    // Reporting against a claimed task marks it running.
+    if (body.task_id) {
+      await env.DB.prepare(
+        "UPDATE tasks SET status = 'running', updated_at = ? WHERE id = ? AND tenant = ? AND status IN ('todo','claimed')",
+      )
+        .bind(ts, body.task_id, auth!.tenant)
+        .run();
+    }
 
     await env.DB.prepare(
       "INSERT INTO events (session_id, ts, type, level, message) VALUES (?, ?, 'start', 'info', ?)",
@@ -107,7 +145,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
 
     const origin = new URL(request.url).origin.replace(/^http/, "ws");
     return json(
-      { id, ws_url: `${origin}/api/v1/sessions/${id}/stream`, status: body.status || "starting" },
+      { id, ws_url: `${origin}/api/v1/sessions/${id}/stream`, status: body.status || "starting", department_id: departmentId },
       201,
     );
   }

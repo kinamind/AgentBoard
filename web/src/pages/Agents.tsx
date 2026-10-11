@@ -4,6 +4,7 @@ import { useData } from "../store";
 import { useI18n } from "../lib/i18n";
 import LiveTerminal from "../Terminal";
 import { Card, Empty, PageHeader, StatusBadge } from "../components/ui";
+import { DeptChip } from "../components/DeptChip";
 import { ago, duration, STATUS_ORDER } from "../lib/format";
 
 const FILTERS = ["all", "active", "error", "done"] as const;
@@ -16,18 +17,20 @@ function matches(s: Session, f: Filter): boolean {
 }
 
 export default function Agents({ selected, onSelect }: { selected: string | null; onSelect: (id: string | null) => void }) {
-  const { sessions } = useData();
+  const { sessions, departments } = useData();
   const { t } = useI18n();
   const [filter, setFilter] = useState<Filter>("all");
+  const [dept, setDept] = useState<string>("all");
   const [q, setQ] = useState("");
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return sessions
       .filter((s) => matches(s, filter))
+      .filter((s) => dept === "all" || (dept === "none" ? !s.department_id : s.department_id === dept))
       .filter((s) => !needle || `${s.title ?? ""} ${s.agent_type} ${s.cwd ?? ""} ${s.id}`.toLowerCase().includes(needle))
       .sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || b.updated_at - a.updated_at);
-  }, [sessions, filter, q]);
+  }, [sessions, filter, q, dept]);
 
   const current = sessions.find((s) => s.id === selected) || null;
 
@@ -42,6 +45,11 @@ export default function Agents({ selected, onSelect }: { selected: string | null
         >
           <div className="toolbar">
             <input className="search" placeholder={t("ag.search")} value={q} onChange={(e) => setQ(e.target.value)} />
+            <select value={dept} onChange={(e) => setDept(e.target.value)}>
+              <option value="all">{t("ag.allDepts")}</option>
+              <option value="none">{t("common.unassigned")}</option>
+              {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
             <div className="seg">
               {FILTERS.map((f) => (
                 <button key={f} className={f === filter ? "on" : ""} onClick={() => setFilter(f)}>
@@ -61,6 +69,7 @@ export default function Agents({ selected, onSelect }: { selected: string | null
                 <div className="srow-meta">
                   <StatusBadge status={s.status} />
                   <span className="chip">{s.agent_type}</span>
+                  <DeptChip id={s.department_id} />
                 </div>
               </div>
             ))}
@@ -75,6 +84,7 @@ export default function Agents({ selected, onSelect }: { selected: string | null
 
 function SessionDetail({ session }: { session: Session }) {
   const { t } = useI18n();
+  const { departments, refresh } = useData();
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const id = session.id;
 
@@ -110,6 +120,23 @@ function SessionDetail({ session }: { session: Session }) {
           </div>
           <dl className="meta">
             <div><dt>{t("ag.agent")}</dt><dd>{session.agent_type}</dd></div>
+            <div>
+              <dt>{t("ag.dept")}</dt>
+              <dd>
+                <select
+                  className="inline-select"
+                  value={session.department_id ?? ""}
+                  onChange={async (e) => {
+                    await api.assign(session.id, e.target.value || null);
+                    refresh();
+                  }}
+                >
+                  <option value="">{t("common.unassigned")}</option>
+                  {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </dd>
+            </div>
+            {session.task_id && <div><dt>{t("ag.task")}</dt><dd>{session.task_id}</dd></div>}
             <div><dt>{t("ag.host")}</dt><dd>{session.host || "—"}</dd></div>
             <div><dt>PID</dt><dd>{session.pid ?? "—"}</dd></div>
             <div><dt>{t("ag.duration")}</dt><dd>{duration(session.started_at, session.ended_at)}</dd></div>

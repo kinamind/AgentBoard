@@ -1,10 +1,11 @@
 import { useData } from "../store";
 import { useI18n } from "../lib/i18n";
 import { Card, DistributionBar, Empty, KpiCard, PageHeader, StatusBadge } from "../components/ui";
+import { api } from "../api";
 import { ago, isActive, isStale, STATUS_COLORS } from "../lib/format";
 
 export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
-  const { sessions, stats, loaded } = useData();
+  const { sessions, stats, loaded, departments, decisions, refresh } = useData();
   const { t } = useI18n();
   const active = sessions.filter((s) => isActive(s.status));
   const errors = sessions.filter((s) => s.status === "error");
@@ -30,6 +31,42 @@ export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
         />
       </div>
 
+      <Card title={t("ov.byDept")} flush>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>{t("ov.deptName")}</th>
+              <th className="num">{t("ov.deptActive")}</th>
+              <th className="num">{t("ov.deptTotal")}</th>
+              <th className="num">{t("ov.deptFailed")}</th>
+              <th>{t("ov.success")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...departments.map((d) => ({ id: d.id, name: d.name, color: d.color, sc: stats?.by_department?.[d.id] ?? {} })),
+              { id: "none", name: t("common.unassigned"), color: "#9ca3af", sc: stats?.by_department?.none ?? {} }]
+              .filter((r) => r.id !== "none" || Object.keys(r.sc).length)
+              .map((r) => {
+                const total = Object.values(r.sc).reduce((a, b) => a + b, 0);
+                const act = (r.sc.running ?? 0) + (r.sc.waiting ?? 0) + (r.sc.starting ?? 0);
+                const fin = (r.sc.done ?? 0) + (r.sc.error ?? 0) + (r.sc.cancelled ?? 0);
+                const rate = fin ? Math.round(((r.sc.done ?? 0) / fin) * 100) : null;
+                return (
+                  <tr key={r.id}>
+                    <td><span className="dot" style={{ background: r.color || "#9ca3af" }} />{r.name}</td>
+                    <td className="num">{act}</td>
+                    <td className="num">{total}</td>
+                    <td className="num">{r.sc.error ?? 0}</td>
+                    <td>{rate == null ? "—" : `${rate}%`}</td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </Card>
+
+      <div className="spacer" />
+
       <div className="grid-2">
         <Card title={t("ov.dist")}>
           <DistributionBar data={stats?.status ?? {}} />
@@ -54,6 +91,31 @@ export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
           )}
         </Card>
       </div>
+
+      <Card title={`${t("ov.decisions")} (${decisions.length})`} flush>
+        {decisions.length === 0 ? (
+          <Empty title={t("ov.noDecisions")} />
+        ) : (
+          <ul className="list-plain static">
+            {decisions.map((d) => (
+              <li key={d.id}>
+                <div className="decision">
+                  <div className="li-title">{d.question}</div>
+                  <div className="decision-actions">
+                    {d.options.map((o) => (
+                      <button key={o} className="btn" onClick={async () => { await api.answerDecision(d.id, o); refresh(); }}>
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <div className="spacer" />
 
       <div className="grid-2">
         <Card title={t("ov.needs")} flush>

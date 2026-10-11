@@ -48,6 +48,9 @@ def cmd_start(args) -> int:
         title=args.title,
         project=args.project,
         status=args.status,
+        department=args.department,
+        task_id=args.task,
+        tags=args.tag or None,
     )
     if args.print_id:
         print(sid)
@@ -99,6 +102,9 @@ def cmd_wrap(args) -> int:
         agent_type=args.agent,
         title=args.title,
         project=args.project,
+        department=args.department,
+        task_id=args.task,
+        tags=args.tag or None,
     )
 
 
@@ -169,6 +175,128 @@ def _print_clear() -> None:
     sys.stdout.write("\x1b[2J\x1b[H")
 
 
+def _org_args(s) -> None:
+    s.add_argument("--department", help="department slug/id (env AGENTBOARD_DEPARTMENT)")
+    s.add_argument("--task", help="task id this session works on (env AGENTBOARD_TASK)")
+    s.add_argument("--tag", action="append", help="tag (repeatable)")
+
+
+def _dump(obj) -> int:
+    print(json.dumps(obj, indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_dept(args) -> int:
+    c = _client(args)
+    if args.action == "add":
+        return _dump(c.create_department(args.name, slug=args.slug))
+    data = c.departments()
+    if args.json:
+        return _dump(data)
+    print(f"{'SLUG':<13} {'NAME':<14} {'ACTIVE':>6} {'TOTAL':>6} {'ERR':>4}")
+    for d in data["departments"]:
+        sc = d["status_counts"]
+        active = sum(sc.get(k, 0) for k in ("running", "waiting", "starting"))
+        print(f"{d['slug']:<13} {d['name']:<14} {active:>6} {sum(sc.values()):>6} {sc.get('error', 0):>4}")
+    un = data["unassigned"]
+    if un:
+        print(f"{'(unassigned)':<28} {sum(un.values()):>13}")
+    return 0
+
+
+def cmd_assign(args) -> int:
+    _client(args).assign(args.session_id, None if args.department == "none" else args.department)
+    print(f"{args.session_id} -> {args.department}")
+    return 0
+
+
+def cmd_reassign(args) -> int:
+    return _dump(_client(args).reassign(only_unassigned=not args.all))
+
+
+def cmd_rule(args) -> int:
+    return _dump(_client(args).add_rule(args.department, args.field, args.value, op=args.op, priority=args.priority))
+
+
+def cmd_roster(args) -> int:
+    c = _client(args)
+    if args.action == "add":
+        return _dump(c.add_agent(args.name, args.agent_type, department=args.department, role=args.role))
+    return _dump(c.roster())
+
+
+def cmd_goal(args) -> int:
+    c = _client(args)
+    if args.action == "add":
+        return _dump(c.create_goal(args.title, parent_id=args.parent, level=args.level))
+    return _dump(c.goals())
+
+
+def cmd_task(args) -> int:
+    c = _client(args)
+    if args.action == "add":
+        return _dump(
+            c.create_task(
+                args.title,
+                goal_id=args.goal,
+                department=args.department,
+                description=args.description,
+                depends_on=args.depends_on,
+            )
+        )
+    if args.action == "claim":
+        t = c.claim_task(agent=args.agent, department=args.department, lease_seconds=args.lease)
+        if not t:
+            print("no ready task")
+            return 3
+        return _dump(t)
+    if args.action == "update":
+        fields = {k: v for k, v in (("status", args.status), ("title", args.title)) if v}
+        if args.result:
+            fields["result"] = json.loads(args.result)
+        c.update_task(args.task_id, **fields)
+        print("ok")
+        return 0
+    if args.action == "heartbeat":
+        return _dump(c.task_heartbeat(args.task_id, lease_seconds=args.lease))
+    rows = c.tasks(status=args.status or "", department_id=args.department or "")
+    if args.json:
+        return _dump(rows)
+    for t in rows:
+        flag = "ready" if t["ready"] else ""
+        print(f"{t['id']:<22} {t['status']:<9} {flag:<6} {t['title']}")
+    return 0
+
+
+def cmd_decide(args) -> int:
+    c = _client(args)
+    if args.action == "ask":
+        return _dump(c.ask_decision(args.question, options=args.option, session_id=args.session or c.session_id))
+    if args.action == "answer":
+        c.answer_decision(args.decision_id, args.text)
+        print("ok")
+        return 0
+    return _dump(c.decisions(status=None if args.all else "pending"))
+
+
+def cmd_insights(args) -> int:
+    c = _client(args)
+    if args.action == "context":
+        return _dump(c.insights_context(scope=args.scope, scope_id=args.id))
+    if args.action == "post":
+        result = json.load(open(args.file, encoding="utf-8")) if args.file else json.load(sys.stdin)
+        return _dump(
+            c.post_analysis(
+                args.framework, args.target_type, result, target_id=args.target_id, analyzer=args.analyzer
+            )
+        )
+    return _dump(c.analyses(framework=args.framework or "", target_id=args.target_id or ""))
+
+
+def cmd_migrate(args) -> int:
+    return _dump(_client(args).migrate())
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="agentboard", description="AgentBoard reporter & monitor")
     p.add_argument("--url", help="server base URL (env AGENTBOARD_URL)")
@@ -181,6 +309,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--title")
     s.add_argument("--project")
     s.add_argument("--status", default="running")
+    _org_args(s)
     s.add_argument("--print-id", action="store_true", help="print only the session id")
     s.set_defaults(func=cmd_start)
 
@@ -216,6 +345,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--agent", default="shell")
     s.add_argument("--title")
     s.add_argument("--project")
+    _org_args(s)
     s.add_argument("command", nargs=argparse.REMAINDER, help="-- command args...")
     s.set_defaults(func=cmd_wrap)
 
@@ -243,10 +373,96 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("stats", help="aggregate stats")
     s.set_defaults(func=cmd_stats)
 
+    # --- organization ---
+    s = sub.add_parser("dept", help="list / add departments")
+    s.add_argument("action", nargs="?", default="list", choices=["list", "add"])
+    s.add_argument("--name")
+    s.add_argument("--slug")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_dept)
+
+    s = sub.add_parser("assign", help="assign a session to a department (or 'none')")
+    s.add_argument("session_id")
+    s.add_argument("department")
+    s.set_defaults(func=cmd_assign)
+
+    s = sub.add_parser("reassign", help="re-apply task/roster/rules to sessions")
+    s.add_argument("--all", action="store_true", help="also re-evaluate sessions that already have a department")
+    s.set_defaults(func=cmd_reassign)
+
+    s = sub.add_parser("rule", help="add an auto-assignment rule")
+    s.add_argument("department")
+    s.add_argument("--field", required=True, choices=["agent_type", "project", "title", "cwd"])
+    s.add_argument("--value", required=True)
+    s.add_argument("--op", default="eq", choices=["eq", "prefix", "contains", "regex"])
+    s.add_argument("--priority", type=int, default=100)
+    s.set_defaults(func=cmd_rule)
+
+    s = sub.add_parser("roster", help="list / add agents in the roster")
+    s.add_argument("action", nargs="?", default="list", choices=["list", "add"])
+    s.add_argument("--name")
+    s.add_argument("--agent-type", dest="agent_type")
+    s.add_argument("--department")
+    s.add_argument("--role")
+    s.set_defaults(func=cmd_roster)
+
+    # --- goals / tasks ---
+    s = sub.add_parser("goal", help="list / add goals")
+    s.add_argument("action", nargs="?", default="list", choices=["list", "add"])
+    s.add_argument("--title")
+    s.add_argument("--parent")
+    s.add_argument("--level")
+    s.set_defaults(func=cmd_goal)
+
+    s = sub.add_parser("task", help="task board: list|add|claim|update|heartbeat")
+    s.add_argument("action", nargs="?", default="list", choices=["list", "add", "claim", "update", "heartbeat"])
+    s.add_argument("task_id", nargs="?")
+    s.add_argument("--title")
+    s.add_argument("--description")
+    s.add_argument("--goal")
+    s.add_argument("--department")
+    s.add_argument("--depends-on", dest="depends_on", action="append")
+    s.add_argument("--agent", help="claimer name (claim)")
+    s.add_argument("--lease", type=int, default=900, help="lease seconds (claim/heartbeat)")
+    s.add_argument("--status")
+    s.add_argument("--result", help="JSON result (update)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_task)
+
+    s = sub.add_parser("decide", help="decision inbox: ask|list|answer")
+    s.add_argument("action", nargs="?", default="list", choices=["list", "ask", "answer"])
+    s.add_argument("decision_id", nargs="?")
+    s.add_argument("--question")
+    s.add_argument("--option", action="append")
+    s.add_argument("--text", help="answer text")
+    s.add_argument("--session")
+    s.add_argument("--all", action="store_true")
+    s.set_defaults(func=cmd_decide)
+
+    # --- insights ---
+    s = sub.add_parser("insights", help="decision support: context|post|list")
+    s.add_argument("action", nargs="?", default="list", choices=["context", "post", "list"])
+    s.add_argument("--scope", default="company", choices=["company", "department", "goal"])
+    s.add_argument("--id")
+    s.add_argument("--framework")
+    s.add_argument("--target-type", dest="target_type", default="company")
+    s.add_argument("--target-id", dest="target_id")
+    s.add_argument("--analyzer", default="external:agent")
+    s.add_argument("--file", help="JSON result file (post); default stdin")
+    s.set_defaults(func=cmd_insights)
+
+    s = sub.add_parser("migrate", help="apply server schema upgrades (idempotent)")
+    s.set_defaults(func=cmd_migrate)
+
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # Windows consoles default to a legacy codepage
+        except Exception:
+            pass
     parser = build_parser()
     args = parser.parse_args(argv)
     # `wrap` uses REMAINDER which keeps a leading "--"; strip it.

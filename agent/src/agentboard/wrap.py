@@ -11,6 +11,7 @@ import queue
 import selectors
 import signal
 import subprocess
+import tempfile
 import threading
 import time
 from typing import Sequence
@@ -24,15 +25,34 @@ def run_wrapped(
     agent_type: str = "shell",
     title: str | None = None,
     project: str | None = None,
+    department: str | None = None,
+    task_id: str | None = None,
+    tags: list[str] | None = None,
     flush_interval: float = 0.4,
     poll_interval: float = 2.0,
 ) -> int:
     """Run ``command``, streaming output to AgentBoard. Returns the exit code."""
     title = title or " ".join(command)
-    client.start(agent_type=agent_type, title=title, project=project, status="running")
+    client.start(
+        agent_type=agent_type,
+        title=title,
+        project=project,
+        status="running",
+        department=department,
+        task_id=task_id,
+        tags=tags,
+    )
+
+    # Management ``message`` commands are appended to this file so the child process
+    # can actually read them. The child also learns its session id (to ask decisions).
+    inbox = os.path.join(tempfile.gettempdir(), f"agentboard-inbox-{client.session_id}.txt")
+    child_env = dict(os.environ)
+    child_env["AGENTBOARD_SESSION"] = client.session_id or ""
+    child_env["AGENTBOARD_INBOX"] = inbox
 
     proc = subprocess.Popen(
         command,
+        env=child_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         bufsize=1,
@@ -59,7 +79,7 @@ def run_wrapped(
         while not stop.is_set():
             try:
                 for cmd in client.poll_commands():
-                    _apply_command(client, proc, cmd)
+                    _apply_command(client, proc, cmd, inbox)
             except Exception:
                 pass
             stop.wait(poll_interval)
@@ -108,7 +128,7 @@ def run_wrapped(
     return code
 
 
-def _apply_command(client: AgentBoardClient, proc: subprocess.Popen, cmd: dict) -> None:
+def _apply_command(client: AgentBoardClient, proc: subprocess.Popen, cmd: dict, inbox: str | None = None) -> None:
     kind = cmd.get("kind")
     cid = cmd.get("id")
     result: dict = {}
@@ -128,7 +148,10 @@ def _apply_command(client: AgentBoardClient, proc: subprocess.Popen, cmd: dict) 
         elif kind == "message":
             text = (cmd.get("payload") or {}).get("text", "")
             client.event("note", message=f"controller: {text}")
-            result = {"action": "noted"}
+            if inbox:
+                with open(inbox, "a", encoding="utf-8") as f:
+                    f.write(text + "\n")
+            result = {"action": "noted", "inbox": inbox}
         else:
             result = {"action": "ignored", "kind": kind}
         if cid:

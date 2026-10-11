@@ -30,6 +30,13 @@ export const onRequest: PagesFunction<Env, "id"> = async (ctx) => {
     const session = await getSession(env, auth!.tenant, id);
     if (!session) return err("not found", 404);
 
+    // Expire stale commands so nothing dangles forever.
+    await env.DB.prepare(
+      "UPDATE commands SET status = 'expired' WHERE session_id = ? AND status = 'pending' AND expires_at IS NOT NULL AND expires_at < ?",
+    )
+      .bind(id, now())
+      .run();
+
     const rows = await env.DB.prepare(
       "SELECT id, kind, payload_json, ts FROM commands WHERE session_id = ? AND status = 'pending' ORDER BY ts ASC",
     )
@@ -62,14 +69,19 @@ export const onRequest: PagesFunction<Env, "id"> = async (ctx) => {
     const session = await getSession(env, auth!.tenant, id);
     if (!session) return err("not found", 404);
 
+    // Commands to a finished session can never be honoured.
+    if (["done", "error", "cancelled"].includes((session as any).status)) {
+      return err(`session already ${(session as any).status}`, 409);
+    }
+
     const body = (await readJson<CommandBody>(request)) || {};
     if (!body.kind) return err("kind is required");
     const cid = newId("c");
     const ts = now();
     await env.DB.prepare(
-      "INSERT INTO commands (id, session_id, ts, kind, payload_json, status) VALUES (?, ?, ?, ?, ?, 'pending')",
+      "INSERT INTO commands (id, session_id, ts, kind, payload_json, status, expires_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
     )
-      .bind(cid, id, ts, body.kind, body.payload ? JSON.stringify(body.payload) : null)
+      .bind(cid, id, ts, body.kind, body.payload ? JSON.stringify(body.payload) : null, ts + 10 * 60_000)
       .run();
     await env.DB.prepare(
       "INSERT INTO events (session_id, ts, type, level, message, data_json) VALUES (?, ?, 'command', 'info', ?, ?)",
