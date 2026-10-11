@@ -1,9 +1,11 @@
 import { useData } from "../store";
+import { useI18n } from "../lib/i18n";
 import { Card, DistributionBar, Empty, KpiCard, PageHeader, StatusBadge } from "../components/ui";
 import { ago, isActive, isStale, STATUS_COLORS } from "../lib/format";
 
 export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
   const { sessions, stats, loaded } = useData();
+  const { t } = useI18n();
   const active = sessions.filter((s) => isActive(s.status));
   const errors = sessions.filter((s) => s.status === "error");
   const stale = sessions.filter((s) => isStale(s));
@@ -14,25 +16,25 @@ export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
 
   return (
     <>
-      <PageHeader title="Overview" desc="Real-time health of every agent running in your company." />
+      <PageHeader title={t("ov.title")} desc={t("ov.desc")} />
 
       <div className="kpi-grid">
-        <KpiCard label="Active agents" value={active.length} hint="running · waiting · starting" color={STATUS_COLORS.running} />
-        <KpiCard label="Total sessions" value={stats?.total ?? 0} hint={`${Object.keys(stats?.agents ?? {}).length} agent types`} />
-        <KpiCard label="Success rate" value={successRate == null ? "—" : `${successRate}%`} hint="of finished sessions" color={STATUS_COLORS.done} />
+        <KpiCard label={t("ov.active")} value={active.length} hint={t("ov.activeHint")} color={STATUS_COLORS.running} />
+        <KpiCard label={t("ov.total")} value={stats?.total ?? 0} hint={t("ov.totalHint", { n: Object.keys(stats?.agents ?? {}).length })} />
+        <KpiCard label={t("ov.success")} value={successRate == null ? "—" : `${successRate}%`} hint={t("ov.successHint")} color={STATUS_COLORS.done} />
         <KpiCard
-          label="Needs attention"
+          label={t("ov.attention")}
           value={attention.length}
-          hint="failed or stalled > 10m"
+          hint={t("ov.attentionHint")}
           color={attention.length ? STATUS_COLORS.error : undefined}
         />
       </div>
 
       <div className="grid-2">
-        <Card title="Status distribution">
+        <Card title={t("ov.dist")}>
           <DistributionBar data={stats?.status ?? {}} />
         </Card>
-        <Card title="Agent types">
+        <Card title={t("ov.types")}>
           {stats && Object.keys(stats.agents).length ? (
             <div className="bar-list">
               {Object.entries(stats.agents)
@@ -48,15 +50,15 @@ export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
                 ))}
             </div>
           ) : (
-            <div className="dist-empty">No data</div>
+            <div className="dist-empty">{t("common.noData")}</div>
           )}
         </Card>
       </div>
 
       <div className="grid-2">
-        <Card title="Needs attention" flush>
+        <Card title={t("ov.needs")} flush>
           {attention.length === 0 ? (
-            <Empty title="All clear" desc="No failed or stalled sessions." />
+            <Empty title={t("ov.allClear")} desc={t("ov.allClearDesc")} />
           ) : (
             <ul className="list-plain">
               {attention.map((s) => (
@@ -64,7 +66,7 @@ export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
                   <div>
                     <div className="li-title">{s.title || s.id}</div>
                     <div className="li-sub">
-                      {s.agent_type} · {s.status === "error" ? `exit ${s.exit_code ?? "?"}` : `silent ${ago(s.updated_at)}`}
+                      {s.agent_type} · {s.status === "error" ? t("ov.exit", { code: s.exit_code ?? "?" }) : t("ov.silent", { t: ago(s.updated_at) })}
                     </div>
                   </div>
                   <StatusBadge status={s.status} />
@@ -73,11 +75,11 @@ export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
             </ul>
           )}
         </Card>
-        <Card title="Recent activity" flush>
+        <Card title={t("ov.recent")} flush>
           {!loaded ? (
-            <Empty title="Loading…" />
+            <Empty title={t("common.loading")} />
           ) : sessions.length === 0 ? (
-            <Empty title="No sessions yet" desc="Run `agentboard wrap -- <cmd>` to report your first agent." />
+            <Empty title={t("ov.noSessions")} desc={t("ov.noSessionsDesc")} />
           ) : (
             <ul className="list-plain">
               {sessions.slice(0, 6).map((s) => (
@@ -85,7 +87,7 @@ export default function Overview({ onOpen }: { onOpen: (id: string) => void }) {
                   <div>
                     <div className="li-title">{s.title || s.id}</div>
                     <div className="li-sub">
-                      {s.agent_type} · {ago(s.updated_at)} ago
+                      {s.agent_type} · {t("ov.ago", { t: ago(s.updated_at) })}
                     </div>
                   </div>
                   <StatusBadge status={s.status} />

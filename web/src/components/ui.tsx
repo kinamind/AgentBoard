@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { STATUS_COLORS } from "../lib/format";
+import { useI18n } from "../lib/i18n";
 
 export function StatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
   return (
     <span className={`badge badge-${status}`}>
       <i className="badge-dot" />
-      {status}
+      {t(`status.${status}` as any) === `status.${status}` ? status : t(`status.${status}` as any)}
     </span>
   );
 }
@@ -88,8 +90,9 @@ export function Empty({ title, desc }: { title: string; desc?: string }) {
 
 /** Horizontal stacked bar for status distribution. */
 export function DistributionBar({ data }: { data: Record<string, number> }) {
+  const { t } = useI18n();
   const total = Object.values(data).reduce((a, b) => a + b, 0);
-  if (!total) return <div className="dist-empty">No data</div>;
+  if (!total) return <div className="dist-empty">{t("common.noData")}</div>;
   return (
     <div>
       <div className="dist-bar">
@@ -101,7 +104,7 @@ export function DistributionBar({ data }: { data: Record<string, number> }) {
         {Object.entries(data).map(([k, v]) => (
           <span key={k}>
             <i style={{ background: STATUS_COLORS[k] || "#94a3b8" }} />
-            {k} <b>{v}</b>
+            {t(`status.${k}` as any)} <b>{v}</b>
           </span>
         ))}
       </div>
@@ -110,11 +113,12 @@ export function DistributionBar({ data }: { data: Record<string, number> }) {
 }
 
 export function ComingSoon({ items }: { items: { title: string; desc: string }[] }) {
+  const { t } = useI18n();
   return (
     <div className="roadmap">
       {items.map((i) => (
         <div className="roadmap-item" key={i.title}>
-          <span className="tag">Planned</span>
+          <span className="tag">{t("common.planned")}</span>
           <div className="roadmap-title">{i.title}</div>
           <div className="roadmap-desc">{i.desc}</div>
         </div>

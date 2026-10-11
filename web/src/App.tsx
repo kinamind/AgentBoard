@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { DataProvider, useData } from "./store";
+import { I18nProvider, useI18n } from "./lib/i18n";
 import { NAV, Page, Sidebar, Topbar } from "./components/Shell";
 import Overview from "./pages/Overview";
 import Agents from "./pages/Agents";
@@ -16,6 +17,7 @@ function Shell() {
     () => (localStorage.getItem("agentboard.theme") as "light" | "dark") || "light",
   );
   const { error } = useData();
+  const { t } = useI18n();
 
   useEffect(() => {
     const on = () => setLoc(parseHash());
@@ -32,14 +34,15 @@ function Shell() {
     location.hash = p ? `/${id}/${p}` : `/${id}`;
   }, []);
 
-  const title = NAV.find((n) => n.id === route)?.label ?? "Overview";
+  const navItem = NAV.find((n) => n.id === route) ?? NAV[0];
+  const title = t(navItem.label);
 
   return (
     <div className="shell">
       <Sidebar route={route} onNavigate={(id) => go(id)} />
       <div className="content">
         <Topbar title={title} theme={theme} onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")} />
-        {error && <div className="banner-error">Unable to reach the API: {error}</div>}
+        {error && <div className="banner-error">{t("err.api", { msg: error })}</div>}
         <main className="scroll">
           <Page>
             {route === "overview" && <Overview onOpen={(id) => go("agents", id)} />}
@@ -57,8 +60,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <DataProvider>
-      <Shell />
-    </DataProvider>
+    <I18nProvider>
+      <DataProvider>
+        <Shell />
+      </DataProvider>
+    </I18nProvider>
   );
 }

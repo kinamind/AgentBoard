@@ -223,3 +223,5 @@ input:focus { outline: 2px solid var(--primary-soft); border-color: var(--primar
   .sidebar-nav { display: none; }
   .page { padding: 16px; }
 }
+
+.lang-btn { padding: 6px 12px; }

@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { getToken, setToken } from "../api";
 import { useData } from "../store";
+import { useI18n, type Key } from "../lib/i18n";
 
 export interface NavItem {
   id: string;
-  label: string;
+  label: Key;
   icon: string; // svg path (24x24, stroke)
   badge?: number;
   soon?: boolean;
@@ -20,12 +21,12 @@ const I = {
 };
 
 export const NAV: NavItem[] = [
-  { id: "overview", label: "Overview", icon: I.overview },
-  { id: "agents", label: "Agents & Sessions", icon: I.agents },
-  { id: "departments", label: "Departments", icon: I.dept, soon: true },
-  { id: "goals", label: "Goals & Tasks", icon: I.goals, soon: true },
-  { id: "insights", label: "Insights", icon: I.insights, soon: true },
-  { id: "settings", label: "Settings", icon: I.settings },
+  { id: "overview", label: "nav.overview", icon: I.overview },
+  { id: "agents", label: "nav.agents", icon: I.agents },
+  { id: "departments", label: "nav.departments", icon: I.dept, soon: true },
+  { id: "goals", label: "nav.goals", icon: I.goals, soon: true },
+  { id: "insights", label: "nav.insights", icon: I.insights, soon: true },
+  { id: "settings", label: "nav.settings", icon: I.settings },
 ];
 
 function Icon({ d }: { d: string }) {
@@ -38,6 +39,7 @@ function Icon({ d }: { d: string }) {
 
 export function Sidebar({ route, onNavigate }: { route: string; onNavigate: (id: string) => void }) {
   const { sessions } = useData();
+  const { t } = useI18n();
   const active = sessions.filter((s) => s.status === "running" || s.status === "waiting").length;
   return (
     <aside className="sidebar-nav">
@@ -45,25 +47,25 @@ export function Sidebar({ route, onNavigate }: { route: string; onNavigate: (id:
         <div className="logo">A</div>
         <div>
           <div className="brand-name">AgentBoard</div>
-          <div className="brand-sub">OPC Console</div>
+          <div className="brand-sub">{t("brand.sub")}</div>
         </div>
       </div>
       <nav>
-        <div className="nav-group">Workspace</div>
+        <div className="nav-group">{t("nav.workspace")}</div>
         {NAV.slice(0, 2).map((n) => (
           <NavButton key={n.id} n={n} route={route} onNavigate={onNavigate} badge={n.id === "agents" ? active : undefined} />
         ))}
-        <div className="nav-group">Company</div>
+        <div className="nav-group">{t("nav.company")}</div>
         {NAV.slice(2, 5).map((n) => (
           <NavButton key={n.id} n={n} route={route} onNavigate={onNavigate} />
         ))}
-        <div className="nav-group">System</div>
+        <div className="nav-group">{t("nav.system")}</div>
         {NAV.slice(5).map((n) => (
           <NavButton key={n.id} n={n} route={route} onNavigate={onNavigate} />
         ))}
       </nav>
       <div className="sidebar-foot">
-        <span className="live-dot" /> Live · polling 3s
+        <span className="live-dot" /> {t("foot.live")}
       </div>
     </aside>
   );
@@ -80,11 +82,12 @@ function NavButton({
   onNavigate: (id: string) => void;
   badge?: number;
 }) {
+  const { t } = useI18n();
   return (
     <button className={"nav-item" + (route === n.id ? " active" : "")} onClick={() => onNavigate(n.id)}>
       <Icon d={n.icon} />
-      <span className="nav-label">{n.label}</span>
-      {n.soon && <span className="nav-soon">Soon</span>}
+      <span className="nav-label">{t(n.label)}</span>
+      {n.soon && <span className="nav-soon">{t("nav.soon")}</span>}
       {!!badge && <span className="nav-badge">{badge}</span>}
     </button>
   );
@@ -100,18 +103,22 @@ export function Topbar({
   onToggleTheme: () => void;
 }) {
   const { error } = useData();
+  const { t, lang, setLang } = useI18n();
   return (
     <header className="topbar">
       <div className="crumbs">
-        <span className="crumb-root">Console</span>
+        <span className="crumb-root">{t("top.console")}</span>
         <span className="crumb-sep">/</span>
         <span className="crumb-cur">{title}</span>
       </div>
       <div className="topbar-right">
         <span className={"conn " + (error ? "bad" : "ok")}>
-          <i /> {error ? "Disconnected" : "Connected"}
+          <i /> {error ? t("top.disconnected") : t("top.connected")}
         </span>
-        <button className="icon-btn" onClick={onToggleTheme} title="Toggle theme">
+        <button className="btn lang-btn" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+          {t("top.lang")}
+        </button>
+        <button className="icon-btn" onClick={onToggleTheme} title={t("top.theme")}>
           {theme === "light" ? "☾" : "☀"}
         </button>
       </div>
@@ -125,10 +132,11 @@ export function Page({ children }: { children: ReactNode }) {
 
 export function ApiKeyForm() {
   const { refresh } = useData();
+  const { t } = useI18n();
   const [v, setV] = useState(getToken());
   return (
     <div className="form-row">
-      <input value={v} onChange={(e) => setV(e.target.value)} placeholder="API key" spellCheck={false} />
+      <input value={v} onChange={(e) => setV(e.target.value)} placeholder={t("set.keyPh")} spellCheck={false} />
       <button
         className="btn btn-primary"
         onClick={() => {
@@ -136,7 +144,7 @@ export function ApiKeyForm() {
           refresh();
         }}
       >
-        Save
+        {t("set.save")}
       </button>
     </div>
   );
