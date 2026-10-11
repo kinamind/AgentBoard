@@ -18,7 +18,7 @@ export default function LiveTerminal({ sessionId }: { sessionId: string }) {
       lineHeight: 1.35,
       letterSpacing: 0.2,
       theme: {
-        background: "#101218",
+        background: "#0f1117",
         foreground: "#cdd1dc",
         cursor: "#6366f1",
         black: "#1d212b",
