@@ -74,7 +74,7 @@ body.idle #skip{opacity:0}
 #play.on{display:grid}
 #play i{width:120px;height:120px;border-radius:50%;background:rgba(99,102,241,.9);display:grid;place-items:center;box-shadow:0 20px 80px rgba(99,102,241,.6)}
 #play i::after{content:"";margin-left:8px;border-left:34px solid #fff;border-top:22px solid transparent;border-bottom:22px solid transparent}
-</style>
+#ver{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9;display:flex;padding:4px;border-radius:999px;background:rgba(10,12,22,.65);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(10px);transition:opacity .4s}#ver a{color:#8d95aa;text-decoration:none;font-weight:600;font-size:13px;padding:7px 18px;border-radius:999px}#ver a.on{color:#fff;background:linear-gradient(135deg,#6366f1,#8b5cf6)}#ver a:not(.on):hover{color:#fff}body.idle #ver{opacity:0}</style>
 </head>
 <body>
 <div id="viewport">
@@ -108,7 +108,7 @@ body.idle #skip{opacity:0}
   <div id="play"><i></i></div>
 </div>
 
-<a id="skip" href="/" data-k="skip">进入控制台 →</a>
+<nav id="ver"><a href="/landing" class="on" id="vA"></a><a href="/story" id="vB"></a></nav><script>(function(){var q=new URLSearchParams(location.search),zh=(q.get("lang")||navigator.language||"zh").toLowerCase().indexOf("zh")==0;try{localStorage.setItem("agentboard.intro","landing")}catch(e){}var a=document.getElementById("vA"),b=document.getElementById("vB");a.textContent=zh?"看板版":"Dashboard";b.textContent=zh?"故事版":"Story";b.href="/story?lang="+(zh?"zh":"en");if(q.get("ui")==="0")document.getElementById("ver").style.display="none";document.addEventListener("keydown",function(e){if(e.code==="KeyV")b.click()})})()</script><a id="skip" href="/" data-k="skip">进入控制台 →</a>
 <div id="ui">
   <div id="chapters"></div>
   <div id="bar">

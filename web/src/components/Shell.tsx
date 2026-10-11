@@ -67,7 +67,15 @@ export function Sidebar({ route, onNavigate }: { route: string; onNavigate: (id:
       <div className="sidebar-foot">
         <span className="live-dot" /> {t("foot.live")}
       </div>
-      <a className="intro-link" href="/landing.html" target="_blank" rel="noreferrer">
+      <a className="intro-link" href="/landing.html" target="_blank" rel="noreferrer"
+         onClick={(e) => {
+           try {
+             if (localStorage.getItem("agentboard.intro") === "story") {
+               e.preventDefault();
+               window.open("/story", "_blank", "noopener");
+             }
+           } catch { /* ignore */ }
+         }}>
         ▶ {t("nav.intro")}
       </a>
     </aside>
